@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ITVPlayer1.9.8 - Admin Edition</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+    <style>
+        body { background-color: #000; color: #fff; font-family: sans-serif; }
+        .navbar { background-color: #111; border-bottom: 1px solid #333; }
+        .card-cliente { background-color: #1a1a1a; border: 1px solid #333; border-radius: 8px; margin-bottom: 10px; padding: 15px; }
+        .btn-small { font-size: 0.7rem; padding: 5px; flex: 1; margin: 2px; border: none; color: white; }
+        .bg-lilas { background-color: #9933ff !important; color: white; }
+        #adminLock { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: black; z-index: 9999; display: none; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+        .menu-lateral { height: 100%; width: 0; position: fixed; z-index: 1000; top: 0; left: 0; background-color: #111; overflow-x: hidden; transition: 0.5s; padding-top: 60px; }
+        .menu-lateral a, .menu-lateral label { padding: 8px 32px; text-decoration: none; font-size: 18px; color: #818181; display: block; }
+        
+        /* Estilos Novo Painel Administrativo */
+        .card-financeiro { background: #222; border-left: 4px solid #9933ff; border-radius: 5px; padding: 15px; margin-bottom: 15px; }
+        .stat-val { font-size: 1.5rem; font-weight: bold; color: #00ff00; }
+        .stat-label { font-size: 0.8rem; color: #aaa; text-transform: uppercase; }
+    </style>
+</head>
+<body>
+
+<div id="adminLock">
+    <h2>Entre em contato com o ADM</h2>
+    <p>Aplicativo Bloqueado</p>
+    <button class="btn btn-success mb-3" onclick="window.open('https://wa.me/5585996498573')"><i class="bi bi-whatsapp"></i> WhatsApp ADM</button>
+    <input type="password" id="adminPass" class="form-control w-50 mb-2" placeholder="Senha">
+    <button class="btn btn-primary" onclick="unlockApp()">Desbloquear</button>
+</div>
+
+<div id="mySidenav" class="menu-lateral">
+    <a href="javascript:void(0)" class="closebtn" onclick="closeNav()">&times;</a>
+    <div class="p-3">
+        <label>Msg Cobrança:</label>
+        <textarea id="cfgMsg" class="form-control mb-2"></textarea>
+        <label>Painel 1 (CENTRAL):</label>
+        <input type="text" id="url1" class="form-control mb-2">
+        <label>Painel 2 (WAREZ):</label>
+        <input type="text" id="url2" class="form-control mb-2">
+        <label>Painel 3 (ZEUS):</label>
+        <input type="text" id="url3" class="form-control mb-2">
+        <button class="btn btn-info w-100 mt-3" onclick="saveSettings()">Salvar Configurações</button>
+    </div>
+</div>
+
+<nav class="navbar sticky-top">
+    <div class="container-fluid">
+        <button class="btn text-white" onclick="openNav()"><i class="bi bi-list fs-3"></i></button>
+        <span class="navbar-brand mb-0 h1 text-white">ITVPlayer1.9.8</span>
+        <div>
+            <button class="btn btn-outline-info me-2" onclick="toggleAdminPanel()"><i class="bi bi-graph-up"></i></button>
+            <button class="btn text-white" style="background-color: green;" onclick="showModalCadastro()"><i class="bi bi-plus-lg"></i></button>
+        </div>
+    </div>
+</nav>
+
+<div class="container mt-3">
+    
+    <div id="adminPanel" style="display: none;" class="mb-4 animate__animated animate__fadeIn">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h4><i class="bi bi- cash-stack text-success"></i> Gestão Financeira</h4>
+            <input type="month" id="filterMes" class="form-control w-auto bg-dark text-white border-secondary" onchange="renderFinanceiro()">
+        </div>
+        <div class="row g-2">
+            <div class="col-6 col-md-3">
+                <div class="card-financeiro">
+                    <div class="stat-label">Recebido (Mês)</div>
+                    <div class="stat-val" id="finRecebido">R$ 0,00</div>
+                </div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div class="card-financeiro" style="border-left-color: #ffc107;">
+                    <div class="stat-label">A Receber</div>
+                    <div class="stat-val text-warning" id="finPendente">R$ 0,00</div>
+                </div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div class="card-financeiro" style="border-left-color: #0dcaf0;">
+                    <div class="stat-label">Total Clientes</div>
+                    <div class="stat-val text-info" id="finTotalClientes">0</div>
+                </div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div class="card-financeiro" style="border-left-color: #00ff00;">
+                    <div class="stat-label">Lucro Geral</div>
+                    <div class="stat-val" id="finGeral" style="color: #00ff00;">R$ 0,00</div>
+                </div>
+            </div>
+        </div>
+        <hr class="border-secondary">
+    </div>
+
+    <input type="text" id="search" class="form-control bg-dark text-white border-secondary mb-3" placeholder="Buscar cliente..." onkeyup="renderClientes()">
+
+    <div class="d-flex mb-3">
+        <button class="btn-small bg-primary" onclick="filterData('ativos')">ATIVOS (<span id="countAtivos">0</span>)</button>
+        <button class="btn-small" style="background-color: orange;" onclick="filterData('vencer')">A VENCER (<span id="countVencer">0</span>)</button>
+        <button class="btn-small bg-danger" onclick="filterData('expirados')">EXPIRADOS (<span id="countExp">0</span>)</button>
+        <button class="btn-small bg-info" onclick="filterData('apagar')">A PAGAR (<span id="countPagar">0</span>)</button>
+        <button class="btn-small bg-secondary" onclick="filterData('deletados')">LIXO (<span id="countDel">0</span>)</button>
+    </div>
+
+    <div class="d-flex gap-2 mb-4">
+        <button class="btn btn-outline-light btn-sm w-100" onclick="accessPanel(1)">CENTRAL</button>
+        <button class="btn btn-outline-light btn-sm w-100" onclick="accessPanel(2)">WAREZ</button>
+        <button class="btn btn-outline-light btn-sm w-100" onclick="accessPanel(3)">ZEUS</button>
+    </div>
+
+    <div id="listaClientes"></div>
+</div>
+
+<div class="modal fade" id="modalCadastro" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content bg-dark text-white">
+            <div class="modal-body">
+                <input type="hidden" id="editIndex">
+                <label class="small text-secondary">Nome do Cliente:</label>
+                <input type="text" id="cNome" class="form-control mb-2" placeholder="Nome">
+                <input type="text" id="cUser" class="form-control mb-2" placeholder="Usuário">
+                <input type="text" id="cPass" class="form-control mb-2" placeholder="Senha">
+                <label class="small text-secondary">Valor da Mensalidade:</label>
+                <input type="number" id="cValor" class="form-control mb-2" placeholder="Valor">
+                <label class="small text-secondary">Data de Vencimento:</label>
+                <input type="date" id="cData" class="form-control mb-2">
+                <input type="text" id="cServ" class="form-control mb-2" placeholder="Servidor">
+                <input type="text" id="cUrl" class="form-control mb-2" placeholder="URL">
+                <input type="text" id="cTel" class="form-control mb-2" placeholder="Celular: +55(xx)xxxxx-xxxx">
+                <textarea id="cObs" class="form-control mb-2" placeholder="Observações"></textarea>
+                <button class="btn btn-success w-100" onclick="saveCliente()">Salvar Cliente</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    let clientes = JSON.parse(localStorage.getItem('itv_clientes')) || [];
+    let config = JSON.parse(localStorage.getItem('itv_config')) || { msg: "", p1: "", p2: "", p3: "" };
+    let isUnlocked = localStorage.getItem('itv_unlocked') === 'true';
+    let currentFilter = 'ativos';
+
+    // Inicializar data do filtro de mês
+    document.getElementById('filterMes').value = new Date().toISOString().slice(0, 7);
+
+    function checkLock() {
+        if (!isUnlocked && clientes.length >= 4) {
+            document.getElementById('adminLock').style.display = 'flex';
+        }
+    }
+
+    function toggleAdminPanel() {
+        const panel = document.getElementById('adminPanel');
+        panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+        if(panel.style.display === 'block') renderFinanceiro();
+    }
+
+    function unlockApp() {
+        if (document.getElementById('adminPass').value === 'itv2026001') {
+            isUnlocked = true;
+            localStorage.setItem('itv_unlocked', 'true');
+            document.getElementById('adminLock').style.display = 'none';
+        } else { alert("Senha incorreta!"); }
+    }
+
+    function openNav() { document.getElementById("mySidenav").style.width = "250px"; }
+    function closeNav() { document.getElementById("mySidenav").style.width = "0"; }
+
+    function saveSettings() {
+        config = {
+            msg: document.getElementById('cfgMsg').value,
+            p1: document.getElementById('url1').value,
+            p2: document.getElementById('url2').value,
+            p3: document.getElementById('url3').value
+        };
+        localStorage.setItem('itv_config', JSON.stringify(config));
+        closeNav();
+    }
+
+    function showModalCadastro(index = -1) {
+        if(index === -1) {
+            document.getElementById('editIndex').value = "";
+            document.getElementById('cNome').value = "";
+            document.getElementById('cUser').value = "";
+            document.getElementById('cPass').value = "";
+            document.getElementById('cValor').value = "";
+            document.getElementById('cData').value = "";
+        }
+        new bootstrap.Modal(document.getElementById('modalCadastro')).show();
+    }
+
+    function saveCliente() {
+        const index = document.getElementById('editIndex').value;
+        const novo = {
+            nome: document.getElementById('cNome').value,
+            user: document.getElementById('cUser').value,
+            pass: document.getElementById('cPass').value,
+            valor: parseFloat(document.getElementById('cValor').value) || 0,
+            data: document.getElementById('cData').value,
+            serv: document.getElementById('cServ').value,
+            url: document.getElementById('cUrl').value,
+            tel: document.getElementById('cTel').value,
+            obs: document.getElementById('cObs').value,
+            status: 'ativo'
+        };
+
+        if(index === "") clientes.push(novo);
+        else {
+            novo.status = clientes[index].status;
+            clientes[index] = novo;
+        }
+
+        localStorage.setItem('itv_clientes', JSON.stringify(clientes));
+        location.reload();
+    }
+
+    function renderFinanceiro() {
+        const mesSelecionado = document.getElementById('filterMes').value; // YYYY-MM
+        let recebido = 0;
+        let pendente = 0;
+        let totalGeral = 0;
+        let totalAtivos = 0;
+
+        clientes.forEach(c => {
+            if(c.status !== 'deletado') {
+                const val = parseFloat(c.valor) || 0;
+                totalGeral += val;
+                totalAtivos++;
+                
+                // Verifica se a data do cliente corresponde ao mês selecionado
+                if(c.data.startsWith(mesSelecionado)) {
+                    if(c.status === 'ativo' || c.status === 'vencer' || c.status === 'expirado') {
+                        recebido += val;
+                    } else if(c.status === 'apagar') {
+                        pendente += val;
+                    }
+                }
+            }
+        });
+
+        document.getElementById('finRecebido').innerText = `R$ ${recebido.toFixed(2)}`;
+        document.getElementById('finPendente').innerText = `R$ ${pendente.toFixed(2)}`;
+        document.getElementById('finTotalClientes').innerText = totalAtivos;
+        document.getElementById('finGeral').innerText = `R$ ${totalGeral.toFixed(2)}`;
+    }
+
+    function renderClientes() {
+        const lista = document.getElementById('listaClientes');
+        const search = document.getElementById('search').value.toLowerCase();
+        lista.innerHTML = "";
+        
+        let counts = { ativos: 0, vencer: 0, exp: 0, apagar: 0, del: 0 };
+        const hoje = new Date();
+
+        clientes.forEach((c, i) => {
+            const dataVenc = new Date(c.data);
+            const diffDays = Math.ceil((dataVenc - hoje) / (1000 * 60 * 60 * 24));
+            
+            let statusReal = c.status;
+            if(c.status !== 'deletado' && c.status !== 'apagar') {
+                if(diffDays < 0) statusReal = 'expirado';
+                else if(diffDays <= 3) statusReal = 'vencer';
+                else statusReal = 'ativo';
+            }
+
+            if(statusReal === 'ativo') counts.ativos++;
+            if(statusReal === 'vencer') counts.vencer++;
+            if(statusReal === 'expirado') counts.exp++;
+            if(c.status === 'apagar') counts.apagar++;
+            if(c.status === 'deletado') counts.del++;
+
+            if(currentFilter === 'ativos' && (statusReal === 'deletado' || statusReal === 'expirado' || statusReal === 'apagar')) return;
+            if(currentFilter === 'vencer' && statusReal !== 'vencer') return;
+            if(currentFilter === 'expirados' && statusReal !== 'expirado') return;
+            if(currentFilter === 'apagar' && c.status !== 'apagar') return;
+            if(currentFilter === 'deletados' && c.status !== 'deletado') return;
+            
+            if(!c.nome.toLowerCase().includes(search)) return;
+
+            lista.innerHTML += `
+                <div class="card-cliente">
+                    <div class="d-flex justify-content-between">
+                        <h5>${c.nome}</h5>
+                        <span class="badge ${statusReal === 'expirado' ? 'bg-danger' : (statusReal === 'vencer' ? 'bg-warning' : 'bg-success')}">${c.data}</span>
+                    </div>
+                    <p class="small mb-2">User: ${c.user} | Valor: <strong>R$${c.valor}</strong></p>
+                    <div class="d-flex flex-wrap gap-1">
+                        <button class="btn btn-sm btn-success" onclick="sendZap('${i}', 'cobranca')">COBRAR</button>
+                        <button class="btn btn-sm btn-primary" onclick="updateStatus('${i}', 'pago')">PAGO</button>
+                        <button class="btn btn-sm btn-warning" onclick="updateStatus('${i}', 'naopago')">NÃO PAGO</button>
+                        <button class="btn btn-sm bg-lilas" onclick="editCliente(${i})"><i class="bi bi-pencil"></i></button>
+                        ${c.status === 'deletado' ? 
+                            `<button class="btn btn-sm btn-info" onclick="restore(${i})">RESTAURAR</button>
+                             <button class="btn btn-sm btn-danger" onclick="hardDelete(${i})">EXCLUIR</button>` : 
+                            `<button class="btn btn-sm btn-danger" onclick="softDelete(${i})"><i class="bi bi-trash"></i></button>`
+                        }
+                    </div>
+                </div>
+            `;
+        });
+
+        document.getElementById('countAtivos').innerText = counts.ativos;
+        document.getElementById('countVencer').innerText = counts.vencer;
+        document.getElementById('countExp').innerText = counts.exp;
+        document.getElementById('countPagar').innerText = counts.apagar;
+        document.getElementById('countDel').innerText = counts.del;
+        renderFinanceiro();
+    }
+
+    function sendZap(i, tipo) {
+        const c = clientes[i];
+        let msg = "";
+        const novaData = new Date();
+        novaData.setMonth(novaData.getMonth() + 1);
+        const dataFormat = novaData.toLocaleDateString('pt-BR');
+
+        if(tipo === 'cobranca') {
+            msg = `📩 𝕞𝕤𝕘-𝕒𝕦𝕥𝕠𝕞á𝕥𝕚𝕔𝕒📩\n🚨🚨🚨🚨🚨🚨🚨🚨\n\nOla ${c.nome}!!\nSou o assistente virtual da ITVplayer 🤖\n\nSua lista de\nTV, FILMES & SÉRIES\nexpirou ${c.data}\n\nPara renovar Faz um Pix 💠\n💰Plano Familia: R$:${c.valor}\n${config.msg}`;
+        } else if(tipo === 'pago') {
+            msg = `✅𝕊𝔼𝕌 ℙ𝔸𝔾𝔸𝕄𝔼ℕ𝕋𝕆 𝔽𝕆𝕀 ℂ𝕆ℕ𝔽𝕀ℝ𝕄𝔸𝔻𝕆𝕊!!\n\nNome: ${c.nome}\nPlano Familia: ${c.valor}\nProvedor: ${c.serv}\nUsuário: ${c.user}\nSenha: ${c.pass}\nUrl: ${c.url}\nVence: ${dataFormat}\n\nDivirta-se!!`;
+        } else {
+            msg = `⛔️𝕊𝔼𝕌 ℙ𝔸𝔾𝔸𝕄𝔼ℕ𝕋𝕆 ℕ𝔸𝕆 𝔽𝕆𝕀 ℂ𝕆ℕ𝔽𝕀ℝ𝕄𝔸𝔻𝕆𝕊!!\n\nNome: ${c.nome}\nPlano Familia: ${c.valor}\nProvedor: ${c.serv}\nUsuário: ${c.user}\nSenha: ${c.pass}\nUrl: ${c.url}\nVence: ${dataFormat}\n\nDivirta-se!!`;
+        }
+        
+        window.open(`https://wa.me/${c.tel.replace(/\D/g,'')}?text=${encodeURIComponent(msg)}`);
+    }
+
+    function updateStatus(i, acao) {
+        const dataAtual = new Date(clientes[i].data);
+        dataAtual.setMonth(dataAtual.getMonth() + 1);
+        clientes[i].data = dataAtual.toISOString().split('T')[0];
+        
+        if(acao === 'pago') {
+            clientes[i].status = 'ativo';
+            sendZap(i, 'pago');
+        } else {
+            clientes[i].status = 'apagar';
+            sendZap(i, 'naopago');
+        }
+        localStorage.setItem('itv_clientes', JSON.stringify(clientes));
+        renderClientes();
+    }
+
+    function filterData(f) { currentFilter = f; renderClientes(); }
+    function softDelete(i) { clientes[i].status = 'deletado'; localStorage.setItem('itv_clientes', JSON.stringify(clientes)); renderClientes(); }
+    function restore(i) { clientes[i].status = 'ativo'; localStorage.setItem('itv_clientes', JSON.stringify(clientes)); renderClientes(); }
+    function hardDelete(i) { if(confirm("Excluir permanentemente?")) { clientes.splice(i, 1); localStorage.setItem('itv_clientes', JSON.stringify(clientes)); renderClientes(); } }
+    function accessPanel(n) { const url = config['p'+n]; if(url) window.open(url); else alert("Cadastre a URL no menu lateral"); }
+
+    function editCliente(i) {
+        const c = clientes[i];
+        document.getElementById('editIndex').value = i;
+        document.getElementById('cNome').value = c.nome;
+        document.getElementById('cUser').value = c.user;
+        document.getElementById('cPass').value = c.pass;
+        document.getElementById('cValor').value = c.valor;
+        document.getElementById('cData').value = c.data;
+        document.getElementById('cServ').value = c.serv;
+        document.getElementById('cUrl').value = c.url;
+        document.getElementById('cTel').value = c.tel;
+        document.getElementById('cObs').value = c.obs;
+        new bootstrap.Modal(document.getElementById('modalCadastro')).show();
+    }
+
+    // Inicialização
+    checkLock();
+    renderClientes();
+    document.getElementById('cfgMsg').value = config.msg;
+    document.getElementById('url1').value = config.p1;
+    document.getElementById('url2').value = config.p2;
+    document.getElementById('url3').value = config.p3;
+</script>
+</body>
+</html>
