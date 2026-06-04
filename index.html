@@ -145,7 +145,8 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            padding: 20px;        }
+            padding: 20px;
+        }
         #loginCard {
             background: rgba(26, 26, 26, 0.98);
             border: 1px solid #444;
@@ -194,7 +195,8 @@
         .spinner-border-sm {
             width: 1rem;
             height: 1rem;
-            border-width: 0.15em;        }
+            border-width: 0.15em;
+        }
         /* Botão sair */
         #btnLogout {
             background-color: #dc3545 !important;
@@ -204,6 +206,29 @@
             background-color: #bb2d3b !important;
         }
         /* ========== FIM LOGIN ========== */
+        
+        /* Loading overlay */
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.8);
+            z-index: 20000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+        }
+        .loading-overlay .spinner-border {
+            width: 3rem;
+            height: 3rem;
+        }
+        .loading-text {
+            margin-top: 15px;
+            color: #9933ff;
+        }
     </style>
 </head>
 <body>
@@ -211,9 +236,15 @@
 <!-- Canvas para efeito Matrix -->
 <canvas id="matrixCanvas"></canvas>
 
+<!-- Loading Overlay -->
+<div id="loadingOverlay" class="loading-overlay" style="display: none;">
+    <div class="spinner-border text-primary" role="status"></div>
+    <div class="loading-text">Carregando dados...</div>
+</div>
+
 <!-- ========== TELA DE LOGIN FIREBASE ========== -->
 <div id="loginScreen">
-    <div id="loginCard" class="animate__animated animate__fadeIn">
+    <div id="loginCard">
         <h3><i class="bi bi-shield-lock"></i> ITVPlayer Admin</h3>
         <div id="loginAlert" class="alert alert-danger d-none" role="alert"></div>
         
@@ -224,7 +255,7 @@
             <label class="small text-secondary">Senha:</label>
             <div class="input-group">
                 <input type="password" id="loginPass" class="form-control" placeholder="••••••••" required autocomplete="current-password">
-                <button class="btn btn-outline-secondary" type="button" onclick="togglePass('loginPass', this)">
+                <button class="btn btn-outline-secondary" type="button" onclick="window.togglePass('loginPass', this)">
                     <i class="bi bi-eye"></i>
                 </button>
             </div>
@@ -236,14 +267,15 @@
         </form>
         
         <div class="forgot-pass">
-            <a href="#" onclick="recoverPassword()">Esqueceu a senha?</a>
+            <a href="#" onclick="window.recoverPassword()">Esqueceu a senha?</a>
         </div>
         
         <hr class="border-secondary my-3">
         
         <div class="text-center small text-secondary">
             <i class="bi bi-fire"></i> Protegido por Firebase Authentication
-        </div>    </div>
+        </div>
+    </div>
 </div>
 <!-- ========== FIM LOGIN ========== -->
 
@@ -285,14 +317,15 @@
 
 <div class="container mt-3">
     
-    <div id="adminPanel" style="display: none;" class="mb-4 animate__animated animate__fadeIn">
+    <div id="adminPanel" style="display: none;" class="mb-4">
         <div class="d-flex justify-content-between align-items-center mb-3">
             <h4><i class="bi bi-cash-stack text-success"></i> Gestão Financeira</h4>
             <input type="month" id="filterMes" class="form-control w-auto bg-dark text-white border-secondary" onchange="renderFinanceiro()">
         </div>
         <div class="row g-2">
             <div class="col-6 col-md-3">
-                <div class="card-financeiro">                    <div class="stat-label">Recebido (Mês)</div>
+                <div class="card-financeiro">
+                    <div class="stat-label">Recebido (Mês)</div>
                     <div class="stat-val" id="finRecebido">R$ 0,00</div>
                 </div>
             </div>
@@ -320,7 +353,7 @@
 
     <input type="text" id="search" class="form-control bg-dark text-white border-secondary mb-3" placeholder="Buscar cliente..." onkeyup="renderClientes()">
 
-    <div class="d-flex mb-3">
+    <div class="d-flex mb-3 flex-wrap">
         <button class="btn-small bg-primary" onclick="filterData('ativos')">ATIVOS (<span id="countAtivos">0</span>)</button>
         <button class="btn-small" style="background-color: orange;" onclick="filterData('vencer')">A VENCER (<span id="countVencer">0</span>)</button>
         <button class="btn-small bg-danger" onclick="filterData('expirados')">EXPIRADOS (<span id="countExp">0</span>)</button>
@@ -341,7 +374,8 @@
     <div class="modal-dialog">
         <div class="modal-content bg-dark text-white">
             <div class="modal-body">
-                <input type="hidden" id="editIndex">                <label class="small text-secondary">Nome do Cliente:</label>
+                <input type="hidden" id="editIndex">
+                <label class="small text-secondary">Nome do Cliente:</label>
                 <input type="text" id="cNome" class="form-control mb-2" placeholder="Nome">
                 <input type="text" id="cUser" class="form-control mb-2" placeholder="Usuário">
                 <input type="text" id="cPass" class="form-control mb-2" placeholder="Senha">
@@ -440,84 +474,31 @@
         draw();
     })();
     // ========== FIM MATRIX ==========
-
+    
     // ========== VARIÁVEIS GLOBAIS ==========
     let clientes = [];
     let config = { msg: "", p1: "", p2: "", p3: "" };
     let isUnlocked = localStorage.getItem('itv_unlocked') === 'true';
     let currentFilter = 'ativos';
     let currentUser = null;
-    let unsubscribeClientes = null;
-    let unsubscribeConfig = null;
-    let isInitialLoad = true; // evita loops de renderização desnecessários
+    let isSyncing = false;
+    let syncTimeout = null;
     // ========== FIM VARIÁVEIS ==========
 
-    // ========== FUNÇÕES DE SINCRONIZAÇÃO FIRESTORE EM TEMPO REAL ==========
-    function startFirestoreSync() {
-        if (!currentUser) return;
-        
-        // Listener para clientes
-        if (unsubscribeClientes) unsubscribeClientes();
-        unsubscribeClientes = db.collection('users').doc(currentUser.uid)
-            .onSnapshot((doc) => {
-                if (doc.exists) {
-                    const data = doc.data();
-                    if (data.clientes && Array.isArray(data.clientes)) {
-                        clientes = data.clientes;
-                    } else {
-                        clientes = [];
-                    }
-                    if (data.config) {
-                        config = data.config;
-                        // Atualiza campos do menu lateral se estiver visível
-                        document.getElementById('cfgMsg').value = config.msg || '';
-                        document.getElementById('url1').value = config.p1 || '';
-                        document.getElementById('url2').value = config.p2 || '';
-                        document.getElementById('url3').value = config.p3 || '';
-                    }
-                    // Salva cópia local no localStorage como cache
-                    localStorage.setItem('itv_clientes', JSON.stringify(clientes));
-                    localStorage.setItem('itv_config', JSON.stringify(config));
-                    if (!isInitialLoad) {
-                        renderClientes();
-                        renderFinanceiro();
-                    } else {
-                        renderClientes();
-                        renderFinanceiro();
-                        isInitialLoad = false;
-                    }
-                } else {
-                    // Documento não existe: cria um vazio
-                    saveUserDataToFirebase();
-                }
-            }, (error) => {
-                console.error("Erro no snapshot:", error);
-                // Fallback para localStorage
-                clientes = JSON.parse(localStorage.getItem('itv_clientes')) || [];
-                config = JSON.parse(localStorage.getItem('itv_config')) || { msg: "", p1: "", p2: "", p3: "" };
-                renderClientes();
-                renderFinanceiro();
-            });
+    // ========== FUNÇÕES DE LOADING ==========
+    function showLoading() {
+        document.getElementById('loadingOverlay').style.display = 'flex';
     }
     
-    // Salvar dados no Firestore (sem recarregar)
-    async function saveUserDataToFirebase() {
-        if(!currentUser) return;
-        try {
-            await db.collection('users').doc(currentUser.uid).set({
-                email: currentUser.email,
-                clientes: clientes,
-                config: config,
-                lastUpdate: firebase.firestore.FieldValue.serverTimestamp()
-            }, { merge: true });
-        } catch (error) {
-            console.error('Erro ao salvar dados:', error);
-        }
+    function hideLoading() {
+        document.getElementById('loadingOverlay').style.display = 'none';
     }
-    
+    // ========== FIM LOADING ==========
+
     // ========== FUNÇÕES DE LOGIN FIREBASE ==========
     
-    function togglePass(inputId, btn) {
+    // Mostrar/ocultar senha
+    window.togglePass = function(inputId, btn) {
         const input = document.getElementById(inputId);
         const icon = btn.querySelector('i');
         if(input.type === 'password') {
@@ -527,8 +508,9 @@
             input.type = 'password';
             icon.classList.replace('bi-eye-slash', 'bi-eye');
         }
-    }
+    };
     
+    // Login com Firebase
     document.getElementById('loginForm').addEventListener('submit', async function(e) {
         e.preventDefault();
         
@@ -547,16 +529,19 @@
         try {
             const userCredential = await auth.signInWithEmailAndPassword(email, pass);
             currentUser = userCredential.user;
-            // Inicia sincronização em tempo real
-            startFirestoreSync();
+            
+            await loadUserDataFromFirebase();
             hideLoginScreen();
+            
         } catch (error) {
             console.error('Erro no login:', error);
             let msg = 'Falha no login. Verifique e-mail e senha.';
+            
             if(error.code === 'auth/user-not-found') msg = 'Usuário não encontrado.';
             else if(error.code === 'auth/wrong-password') msg = 'Senha incorreta.';
             else if(error.code === 'auth/invalid-email') msg = 'E-mail inválido.';
             else if(error.code === 'auth/too-many-requests') msg = 'Muitas tentativas. Tente mais tarde.';
+            
             alertBox.textContent = msg;
             alertBox.classList.remove('d-none');
         } finally {
@@ -566,32 +551,104 @@
         }
     });
     
+    // Carregar dados do usuário do Firestore
+    async function loadUserDataFromFirebase() {
+        if(!currentUser) return;
+        
+        showLoading();
+        
+        try {
+            const userDoc = await db.collection('users').doc(currentUser.uid).get();
+            
+            if(userDoc.exists) {
+                const data = userDoc.data();
+                if(data.clientes && Array.isArray(data.clientes)) {
+                    clientes = data.clientes;
+                } else {
+                    clientes = [];
+                }
+                if(data.config) {
+                    config = data.config;
+                } else {
+                    config = { msg: "", p1: "", p2: "", p3: "" };
+                }
+            } else {
+                clientes = [];
+                config = { msg: "", p1: "", p2: "", p3: "" };
+                await saveUserDataToFirebase();
+            }
+            
+            localStorage.setItem('itv_clientes', JSON.stringify(clientes));
+            localStorage.setItem('itv_config', JSON.stringify(config));
+            
+        } catch (error) {
+            console.error('Erro ao carregar dados:', error);
+            const localClientes = localStorage.getItem('itv_clientes');
+            const localConfig = localStorage.getItem('itv_config');
+            if(localClientes) clientes = JSON.parse(localClientes);
+            if(localConfig) config = JSON.parse(localConfig);
+        } finally {
+            hideLoading();
+        }
+    }
+    
+    // Salvar dados do usuário no Firestore com debounce
+    async function saveUserDataToFirebase() {
+        if(!currentUser || isSyncing) return;
+        
+        isSyncing = true;
+        
+        try {
+            await db.collection('users').doc(currentUser.uid).set({
+                email: currentUser.email,
+                clientes: clientes,
+                config: config,
+                lastUpdate: firebase.firestore.FieldValue.serverTimestamp()
+            }, { merge: true });
+        } catch (error) {
+            console.error('Erro ao salvar dados:', error);
+        } finally {
+            isSyncing = false;
+        }
+    }
+    
+    // Função para salvar com debounce
+    function debounceSave() {
+        if(syncTimeout) clearTimeout(syncTimeout);
+        syncTimeout = setTimeout(() => {
+            saveUserDataToFirebase();
+        }, 500);
+    }
+    
+    // Esconder tela de login e mostrar app
     function hideLoginScreen() {
         document.getElementById('loginScreen').style.display = 'none';
-        // Preenche campos laterais com configurações atuais
+        
+        renderClientes();
         document.getElementById('cfgMsg').value = config.msg || '';
         document.getElementById('url1').value = config.p1 || '';
         document.getElementById('url2').value = config.p2 || '';
         document.getElementById('url3').value = config.p3 || '';
-        renderClientes();
-        renderFinanceiro();
     }
     
-    function logoutFirebase() {
+    // Logout do Firebase
+    window.logoutFirebase = function() {
         if(confirm('Deseja realmente sair?')) {
-            if (unsubscribeClientes) unsubscribeClientes();
-            if (unsubscribeConfig) unsubscribeConfig();
             auth.signOut().then(() => {
                 currentUser = null;
+                clientes = [];
+                config = { msg: "", p1: "", p2: "", p3: "" };
+                localStorage.clear();
                 location.reload();
             }).catch(error => {
                 console.error('Erro ao sair:', error);
                 alert('Erro ao sair. Tente novamente.');
             });
         }
-    }
+    };
     
-    function recoverPassword() {
+    // Recuperar senha
+    window.recoverPassword = function() {
         const email = prompt('Digite seu e-mail cadastrado para recuperar a senha:');
         if(email) {
             auth.sendPasswordResetEmail(email)
@@ -602,13 +659,14 @@
                     alert(msg);
                 });
         }
-    }
+    };
     
-    auth.onAuthStateChanged(user => {
+    // Listener de estado de autenticação
+    auth.onAuthStateChanged(async user => {
         if(user) {
             currentUser = user;
             if(document.getElementById('loginScreen').style.display !== 'none') {
-                startFirestoreSync();
+                await loadUserDataFromFirebase();
                 hideLoginScreen();
             }
         } else {
@@ -619,49 +677,49 @@
     
     // ========== FIM FUNÇÕES LOGIN ==========
 
-    // ========== FUNÇÕES AUXILIARES ==========
+    // Função auxiliar para converter data ISO (YYYY-MM-DD) para DD/MM/AAAA
     function formatDateToBR(isoDate) {
         if (!isoDate) return '';
         const parts = isoDate.split('-');
         if (parts.length !== 3) return isoDate;
         return `${parts[2]}/${parts[1]}/${parts[0]}`;
     }
-    
+
     function checkLock() {
-        // Bloqueio desabilitado
         return;
     }
-    
-    function toggleAdminPanel() {
+
+    window.toggleAdminPanel = function() {
         const panel = document.getElementById('adminPanel');
         panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
         if(panel.style.display === 'block') renderFinanceiro();
-    }
-    
-    function unlockApp() {
+    };
+
+    window.unlockApp = function() {
         if (document.getElementById('adminPass').value === 'itv2026001') {
             isUnlocked = true;
             localStorage.setItem('itv_unlocked', 'true');
             document.getElementById('adminLock').style.display = 'none';
         } else { alert("Senha incorreta!"); }
-    }
-    
-    function openNav() { document.getElementById("mySidenav").style.width = "250px"; }
-    function closeNav() { document.getElementById("mySidenav").style.width = "0"; }
-    
-    async function saveSettings() {
+    };
+
+    window.openNav = function() { document.getElementById("mySidenav").style.width = "250px"; };
+    window.closeNav = function() { document.getElementById("mySidenav").style.width = "0"; };
+
+    window.saveSettings = function() {
         config = {
             msg: document.getElementById('cfgMsg').value,
             p1: document.getElementById('url1').value,
             p2: document.getElementById('url2').value,
             p3: document.getElementById('url3').value
         };
-        await saveUserDataToFirebase();
+        localStorage.setItem('itv_config', JSON.stringify(config));
+        debounceSave();
         closeNav();
         alert('Configurações salvas! ✓');
-    }
-    
-    function showModalCadastro(index = -1) {
+    };
+
+    window.showModalCadastro = function(index = -1) {
         if(index === -1) {
             document.getElementById('editIndex').value = "";
             document.getElementById('cNome').value = "";
@@ -687,9 +745,9 @@
             document.getElementById('editIndex').value = index;
         }
         new bootstrap.Modal(document.getElementById('modalCadastro')).show();
-    }
-    
-    async function saveCliente() {
+    };
+
+    window.saveCliente = function() {
         const index = document.getElementById('editIndex').value;
         const novo = {
             nome: document.getElementById('cNome').value,
@@ -703,25 +761,26 @@
             obs: document.getElementById('cObs').value,
             status: 'ativo'
         };
-        
+
         if(index === "") clientes.push(novo);
         else {
             novo.status = clientes[index].status;
             clientes[index] = novo;
         }
-        
-        await saveUserDataToFirebase();
+
+        localStorage.setItem('itv_clientes', JSON.stringify(clientes));
+        debounceSave();
         bootstrap.Modal.getInstance(document.getElementById('modalCadastro')).hide();
         renderClientes();
-    }
-    
-    function renderFinanceiro() {
+    };
+
+    window.renderFinanceiro = function() {
         const mesSelecionado = document.getElementById('filterMes').value;
         let recebido = 0;
         let pendente = 0;
         let totalGeral = 0;
         let totalAtivos = 0;
-        
+
         clientes.forEach(c => {
             if(c.status !== 'deletado') {
                 const val = parseFloat(c.valor) || 0;
@@ -737,23 +796,24 @@
                 }
             }
         });
-        
+
         document.getElementById('finRecebido').innerText = `R$ ${recebido.toFixed(2)}`;
         document.getElementById('finPendente').innerText = `R$ ${pendente.toFixed(2)}`;
         document.getElementById('finTotalClientes').innerText = totalAtivos;
         document.getElementById('finGeral').innerText = `R$ ${totalGeral.toFixed(2)}`;
-    }
-    
-    async function pagarCliente(i) {
+    };
+
+    window.pagarCliente = function(i) {
         const cliente = clientes[i];
         const msg = `✅𝕊𝔼𝕌 ℙ𝔸𝔾𝔸𝕄𝔼ℕ𝕋𝕆 𝔽𝕆𝕀 ℂ𝕆ℕ𝔽𝕀ℝ𝕄𝔸𝔻𝕆𝕊!!\n\nNome: ${cliente.nome}\nPlano Familia: R$ ${cliente.valor.toFixed(2)}\nProvedor: ${cliente.serv}\nUsuário: ${cliente.user}\nSenha: ${cliente.pass}\nUrl: ${cliente.url}\nVence: ${formatDateToBR(cliente.data)}\n\nDivirta-se!!`;
         window.open(`https://wa.me/${cliente.tel.replace(/\D/g,'')}?text=${encodeURIComponent(msg)}`);
         cliente.status = 'ativo';
-        await saveUserDataToFirebase();
+        localStorage.setItem('itv_clientes', JSON.stringify(clientes));
+        debounceSave();
         renderClientes();
-    }
-    
-    function renderClientes() {
+    };
+
+    window.renderClientes = function() {
         const lista = document.getElementById('listaClientes');
         const search = document.getElementById('search').value.toLowerCase();
         lista.innerHTML = "";
@@ -761,7 +821,7 @@
         let counts = { ativos: 0, vencer: 0, exp: 0, apagar: 0, del: 0 };
         const hoje = new Date();
         hoje.setHours(0,0,0,0);
-        
+
         clientes.forEach((c, i) => {
             let dataVenc = c.data ? new Date(c.data) : new Date();
             if(isNaN(dataVenc.getTime())) dataVenc = new Date();
@@ -774,23 +834,23 @@
                 else if(diffDays <= 3) statusReal = 'vencer';
                 else statusReal = 'ativo';
             }
-            
+
             if(statusReal === 'ativo') counts.ativos++;
             if(statusReal === 'vencer') counts.vencer++;
             if(statusReal === 'expirado') counts.exp++;
             if(c.status === 'apagar') counts.apagar++;
             if(c.status === 'deletado') counts.del++;
-            
+
             if(currentFilter === 'ativos' && (statusReal === 'deletado' || statusReal === 'expirado' || statusReal === 'apagar')) return;
             if(currentFilter === 'vencer' && statusReal !== 'vencer') return;
             if(currentFilter === 'expirados' && statusReal !== 'expirado') return;
             if(currentFilter === 'apagar' && c.status !== 'apagar') return;
             if(currentFilter === 'deletados' && c.status !== 'deletado') return;
             if(!c.nome || !c.nome.toLowerCase().includes(search)) return;
-            
+
             const dataFormatada = formatDateToBR(c.data);
             const valorFormatado = `R$ ${(c.valor || 0).toFixed(2)}`;
-            
+
             let botoesHtml = '';
             if (c.status === 'apagar') {
                 botoesHtml = `
@@ -802,14 +862,14 @@
             } else {
                 botoesHtml = `
                     <div class="d-flex flex-wrap gap-1">
-                        <button class="btn btn-sm btn-success" onclick="sendZap(${i}, 'cobranca')">COBRAR</button>
+                        <button class="btn btn-sm btn-success" onclick="sendZap('${i}', 'cobranca')">COBRAR</button>
                         <div class="btn-group">
                             <button type="button" class="btn btn-sm btn-warning dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
                                 RENOVAR
                             </button>
                             <ul class="dropdown-menu">
-                                <li><button class="dropdown-item" onclick="updateStatus(${i}, 'pago')">✅ PAGO</button></li>
-                                <li><button class="dropdown-item" onclick="updateStatus(${i}, 'naopago')">❌ NÃO PAGO</button></li>
+                                <li><button class="dropdown-item" onclick="updateStatus('${i}', 'pago')">✅ PAGO</button></li>
+                                <li><button class="dropdown-item" onclick="updateStatus('${i}', 'naopago')">❌ NÃO PAGO</button></li>
                             </ul>
                         </div>
                         <button class="btn btn-sm bg-lilas" onclick="editCliente(${i})"><i class="bi bi-pencil"></i></button>
@@ -821,7 +881,7 @@
                     </div>
                 `;
             }
-            
+
             lista.innerHTML += `
                 <div class="card-cliente">
                     <div class="d-flex justify-content-between">
@@ -833,16 +893,16 @@
                 </div>
             `;
         });
-        
+
         document.getElementById('countAtivos').innerText = counts.ativos;
         document.getElementById('countVencer').innerText = counts.vencer;
         document.getElementById('countExp').innerText = counts.exp;
         document.getElementById('countPagar').innerText = counts.apagar;
         document.getElementById('countDel').innerText = counts.del;
         renderFinanceiro();
-    }
-    
-    function sendZap(i, tipo) {
+    };
+
+    window.sendZap = function(i, tipo) {
         const c = clientes[i];
         if(!c || !c.tel) { alert('Telefone do cliente não cadastrado!'); return; }
         
@@ -851,7 +911,7 @@
         novaData.setMonth(novaData.getMonth() + 1);
         const dataFormatada = formatDateToBR(c.data);
         const novaDataFormatada = formatDateToBR(novaData.toISOString().split('T')[0]);
-        
+
         if(tipo === 'cobranca') {
             msg = `📩 𝕞𝕤𝕘-𝕒𝕦𝕥𝕠𝕞á𝕥𝕚𝕔𝕒📩\n🚨🚨🚨🚨🚨🚨🚨🚨\n\nOla ${c.nome || 'Cliente'}!!\nSou o assistente virtual da ITVPlayer 🤖\n\nSua lista de\nTV, FILMES & SÉRIES\nexpirou ${dataFormatada}\n\nPara renovar Faz um Pix 💠\n💰Plano Familia: R$:${(c.valor || 0).toFixed(2)}\n${config.msg || ''}`;
         } else if(tipo === 'pago') {
@@ -861,9 +921,9 @@
         }
         
         window.open(`https://wa.me/${c.tel.replace(/\D/g,'')}?text=${encodeURIComponent(msg)}`);
-    }
-    
-    async function updateStatus(i, acao) {
+    };
+
+    window.updateStatus = function(i, acao) {
         const dataAtual = new Date(clientes[i].data || Date.now());
         dataAtual.setMonth(dataAtual.getMonth() + 1);
         clientes[i].data = dataAtual.toISOString().split('T')[0];
@@ -875,22 +935,21 @@
             clientes[i].status = 'apagar';
             sendZap(i, 'naopago');
         }
-        await saveUserDataToFirebase();
+        localStorage.setItem('itv_clientes', JSON.stringify(clientes));
+        debounceSave();
         renderClientes();
-    }
-    
-    function filterData(f) { currentFilter = f; renderClientes(); }
-    async function softDelete(i) { clientes[i].status = 'deletado'; await saveUserDataToFirebase(); renderClientes(); }
-    async function restore(i) { clientes[i].status = 'ativo'; await saveUserDataToFirebase(); renderClientes(); }
-    async function hardDelete(i) { if(confirm("Excluir permanentemente?")) { clientes.splice(i, 1); await saveUserDataToFirebase(); renderClientes(); } }
-    function accessPanel(n) { const url = config['p'+n]; if(url) window.open(url); else alert("Cadastre a URL no menu lateral"); }
-    function editCliente(i) {
-        showModalCadastro(i);
-    }
-    
+    };
+
+    window.filterData = function(f) { currentFilter = f; renderClientes(); };
+    window.softDelete = function(i) { clientes[i].status = 'deletado'; localStorage.setItem('itv_clientes', JSON.stringify(clientes)); debounceSave(); renderClientes(); };
+    window.restore = function(i) { clientes[i].status = 'ativo'; localStorage.setItem('itv_clientes', JSON.stringify(clientes)); debounceSave(); renderClientes(); };
+    window.hardDelete = function(i) { if(confirm("Excluir permanentemente?")) { clientes.splice(i, 1); localStorage.setItem('itv_clientes', JSON.stringify(clientes)); debounceSave(); renderClientes(); } };
+    window.accessPanel = function(n) { const url = config['p'+n]; if(url) window.open(url); else alert("Cadastre a URL no menu lateral"); };
+    window.editCliente = function(i) { showModalCadastro(i); };
+
+    // Inicialização
     document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('filterMes').value = new Date().toISOString().slice(0, 7);
-        // Aguarda o Firebase carregar (onAuthStateChanged já inicia)
     });
 </script>
 </body>
