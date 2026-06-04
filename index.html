@@ -173,7 +173,6 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
@@ -189,7 +188,6 @@
       appId: "1:291731890067:web:e75e79766765d861db5266"
     };
 
-    // Inicializando Firebase
     firebase.initializeApp(firebaseConfig);
     const auth = firebase.auth();
     const db = firebase.firestore();
@@ -202,7 +200,6 @@
 
     document.getElementById('filterMes').value = new Date().toISOString().slice(0, 7);
 
-    // Monitoramento do Estado de Login em Tempo Real
     auth.onAuthStateChanged(user => {
         if (user) {
             usuarioLogadoUid = user.uid;
@@ -221,21 +218,15 @@
         const email = document.getElementById('loginEmail').value.trim();
         const senha = document.getElementById('loginSenha').value.trim();
         if(!email || !senha) return alert("Preencha todos os campos!");
-
-        auth.signInWithEmailAndPassword(email, senha)
-            .catch(err => alert("Erro ao entrar: " + err.message));
+        auth.signInWithEmailAndPassword(email, senha).catch(err => alert("Erro ao entrar: " + err.message));
     }
 
     function handleLogout() {
-        auth.signOut().then(() => {
-            closeNav();
-        });
+        auth.signOut().then(() => closeNav());
     }
 
-    // Carregamento de Configurações e Clientes Baseados no Usuário Logado
     function syncConfigELoadClientes() {
         if(!usuarioLogadoUid) return;
-
         db.collection("usuarios").doc(usuarioLogadoUid).collection("config").doc("geral")
         .onSnapshot(doc => {
             if(doc.exists) {
@@ -246,37 +237,28 @@
                 document.getElementById('url3').value = config.p3 || "";
             }
         });
-
         db.collection("usuarios").doc(usuarioLogadoUid).collection("clientes")
         .onSnapshot(snapshot => {
             clientes = [];
-            snapshot.forEach(doc => {
-                clientes.push({ id: doc.id, ...doc.data() });
-            });
+            snapshot.forEach(doc => { clientes.push({ id: doc.id, ...doc.data() }); });
             checkLock();
             renderClientes();
         });
     }
 
-    function checkLock() {
-        document.getElementById('adminLock').style.display = 'none';
-    }
-
+    function checkLock() { document.getElementById('adminLock').style.display = 'none'; }
     function toggleAdminPanel() {
         const panel = document.getElementById('adminPanel');
         panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
         if(panel.style.display === 'block') renderFinanceiro();
     }
-
     function unlockApp() {
         isUnlocked = true;
         localStorage.setItem('itv_unlocked', 'true');
         document.getElementById('adminLock').style.display = 'none';
     }
-
     function openNav() { document.getElementById("mySidenav").style.width = "250px"; }
     function closeNav() { document.getElementById("mySidenav").style.width = "0"; }
-
     function saveSettings() {
         if(!usuarioLogadoUid) return;
         config = {
@@ -286,10 +268,8 @@
             p3: document.getElementById('url3').value
         };
         db.collection("usuarios").doc(usuarioLogadoUid).collection("config").doc("geral").set(config)
-            .then(() => closeNav())
-            .catch(err => alert("Erro ao salvar: " + err.message));
+            .then(() => closeNav()).catch(err => alert("Erro ao salvar: " + err.message));
     }
-
     function showModalCadastro(id = "") {
         if(id === "") {
             document.getElementById('editId').value = "";
@@ -305,7 +285,6 @@
         }
         new bootstrap.Modal(document.getElementById('modalCadastro')).show();
     }
-
     function saveCliente() {
         if(!usuarioLogadoUid) return;
         const id = document.getElementById('editId').value;
@@ -321,122 +300,94 @@
             obs: document.getElementById('cObs').value,
             status: 'ativo'
         };
-
         const modalEl = document.getElementById('modalCadastro');
         const modalInstance = bootstrap.Modal.getInstance(modalEl);
-
         if(id === "") {
-            db.collection("usuarios").doc(usuarioLogadoUid).collection("clientes").add(novo)
-                .then(() => modalInstance.hide());
+            db.collection("usuarios").doc(usuarioLogadoUid).collection("clientes").add(novo).then(() => modalInstance.hide());
         } else {
             const index = clientes.findIndex(c => c.id === id);
             novo.status = clientes[index].status;
-            db.collection("usuarios").doc(usuarioLogadoUid).collection("clientes").doc(id).set(novo)
-                .then(() => modalInstance.hide());
+            db.collection("usuarios").doc(usuarioLogadoUid).collection("clientes").doc(id).set(novo).then(() => modalInstance.hide());
         }
     }
-
     function renderFinanceiro() {
         const mesSelecionado = document.getElementById('filterMes').value; 
-        let received = 0;
-        let pending = 0;
-        let totalGeneral = 0;
-        let totalActive = 0;
-
+        let received = 0, pending = 0, totalGeneral = 0, totalActive = 0;
         clientes.forEach(c => {
             if(c.status !== 'deletado') {
                 const val = parseFloat(c.valor) || 0;
                 totalGeneral += val;
                 totalActive++;
-                
                 if(c.data && c.data.startsWith(mesSelecionado)) {
-                    if(c.status === 'ativo' || c.status === 'vencer' || c.status === 'expirado') {
-                        received += val;
-                    } else if(c.status === 'apagar') {
-                        pending += val;
-                    }
+                    if(c.status === 'ativo' || c.status === 'vencer' || c.status === 'expirado') received += val;
+                    else if(c.status === 'apagar') pending += val;
                 }
             }
         });
-
         document.getElementById('finRecebido').innerText = `R$ ${received.toFixed(2)}`;
         document.getElementById('finPendente').innerText = `R$ ${pending.toFixed(2)}`;
         document.getElementById('finTotalClientes').innerText = totalActive;
         document.getElementById('finGeral').innerText = `R$ ${totalGeneral.toFixed(2)}`;
     }
-
     function openWhatsApp(id) {
         const c = clientes.find(item => item.id === id);
-        if(c && c.tel) {
-            const num = c.tel.replace(/\D/g,'');
-            window.open(`https://wa.me/${num}`);
-        } else {
-            alert("Número de telefone não cadastrado!");
-        }
+        if(c && c.tel) window.open(`https://wa.me/${c.tel.replace(/\D/g,'')}`);
+        else alert("Número de telefone não cadastrado!");
     }
 
-    function renderClientes() {
-        const lista = document.getElementById('listaClientes');
-        const search = document.getElementById('search').value.toLowerCase();
-        lista.innerHTML = "";
-        
-        let counts = { ativos: 0, vencer: 0, exp: 0, apagar: 0, del: 0 };
+    // Função auxiliar para somar 1 mês à data atual e retornar { novaDataISO, novaDataBR }
+    function calcularProximoMes() {
         const hoje = new Date();
+        const mesQueVem = new Date(hoje);
+        mesQueVem.setMonth(mesQueVem.getMonth() + 1);
+        const ano = mesQueVem.getFullYear();
+        let mes = mesQueVem.getMonth() + 1;
+        let dia = mesQueVem.getDate();
+        const novaDataISO = `${ano}-${String(mes).padStart(2,'0')}-${String(dia).padStart(2,'0')}`;
+        const novaDataBR = `${String(dia).padStart(2,'0')}/${String(mes).padStart(2,'0')}/${ano}`;
+        return { novaDataISO, novaDataBR };
+    }
 
-        clientes.forEach((c) => {
-            const dataVenc = new Date(c.data);
-            const diffDays = Math.ceil((dataVenc - hoje) / (1000 * 60 * 60 * 24));
-            
-            let statusReal = c.status;
-            if(c.status !== 'deletado' && c.status !== 'apagar') {
-                if(diffDays < 0) statusReal = 'expirado';
-                else if(diffDays <= 3) statusReal = 'vencer';
-                else statusReal = 'ativo';
-            }
-
-            if(statusReal === 'ativo') counts.ativos++;
-            if(statusReal === 'vencer') counts.vencer++;
-            if(statusReal === 'expirado') counts.exp++;
-            if(c.status === 'apagar') counts.apagar++;
-            if(c.status === 'deletado') counts.del++;
-
-            if(currentFilter === 'ativos' && (statusReal === 'deletado' || statusReal === 'expirado' || statusReal === 'apagar')) return;
-            if(currentFilter === 'vencer' && statusReal !== 'vencer') return;
-            if(currentFilter === 'expirados' && statusReal !== 'expirado') return;
-            if(currentFilter === 'apagar' && c.status !== 'apagar') return;
-            if(currentFilter === 'deletados' && c.status !== 'deletado') return;
-            
-            if(!c.nome.toLowerCase().includes(search)) return;
-
-            lista.innerHTML += `
-                <div class="card-cliente">
-                    <div class="d-flex justify-content-between">
-                        <h5>${c.nome}</h5>
-                        <span class="badge ${statusReal === 'expirado' ? 'bg-danger' : (statusReal === 'vencer' ? 'bg-warning' : 'bg-success')}">${c.data}</span>
-                    </div>
-                    <p class="small mb-2">User: ${c.user} | Valor: <strong>R$${c.valor}</strong></p>
-                    <div class="d-flex flex-wrap gap-1">
-                        <button class="btn btn-sm btn-success" onclick="sendZap('${c.id}', 'cobranca')">COBRAR</button>
-                        <button class="btn btn-sm btn-primary" onclick="updateStatus('${c.id}', 'pago')">PAGO</button>
-                        <button class="btn btn-sm btn-warning" onclick="updateStatus('${c.id}', 'naopago')">NÃO PAGO</button>
-                        <button class="btn btn-sm" style="background-color: #25D366; color: white;" onclick="openWhatsApp('${c.id}')"><i class="bi bi-whatsapp"></i></button>
-                        <button class="btn btn-sm bg-lilas" onclick="editCliente('${c.id}')"><i class="bi bi-pencil"></i></button>
-                        ${c.status === 'deletado' ? 
-                            `<button class="btn btn-sm btn-info" onclick="restore('${c.id}')">RESTAURAR</button>
-                             <button class="btn btn-sm btn-danger" onclick="hardDelete('${c.id}')">EXCLUIR</button>` : 
-                            `<button class="btn btn-sm btn-danger" onclick="softDelete('${c.id}')"><i class="bi bi-trash"></i></button>`
-                        }
-                    </div>
-                </div>
-            `;
+    // Botão RENOVAR (atualiza data +1 mês, status ativo, envia mensagem ✅)
+    async function renovarCliente(id) {
+        const cliente = clientes.find(c => c.id === id);
+        if(!cliente) return;
+        const { novaDataISO, novaDataBR } = calcularProximoMes();
+        if(!usuarioLogadoUid) return;
+        await db.collection("usuarios").doc(usuarioLogadoUid).collection("clientes").doc(id).update({
+            data: novaDataISO,
+            status: 'ativo'
         });
+        const msg = `✅𝕊𝔼𝕌 ℙ𝔸𝔾𝔸𝕄𝔼ℕ𝕋𝕆 𝔽𝕆𝕀 ℂ𝕆ℕ𝔽𝕀ℝ𝕄𝔸𝔻𝕆𝕊!!\n\nNome: ${cliente.nome}\nPlano Familia: R$ ${cliente.valor}\nProvedor: ${cliente.serv}\nUsuário: ${cliente.user}\nSenha: ${cliente.pass}\nUrl: ${cliente.url}\nVence: ${novaDataBR}\n\nDivirta-se!!`;
+        if(cliente.tel) window.open(`https://wa.me/${cliente.tel.replace(/\D/g,'')}?text=${encodeURIComponent(msg)}`);
+    }
 
-        document.getElementById('countAtivos').innerText = counts.ativos;
-        document.getElementById('countVencer').innerText = counts.vencer;
-        document.getElementById('countExp').innerText = counts.exp;
-        document.getElementById('countPagar').innerText = counts.apagar;
-        document.getElementById('countDel').innerText = counts.del;
-        renderFinanceiro();
+    // Botão A RECEBER (atualiza data +1 mês, mantém status 'apagar', envia mensagem ⛔️)
+    async function aReceberCliente(id) {
+        const cliente = clientes.find(c => c.id === id);
+        if(!cliente) return;
+        const { novaDataISO, novaDataBR } = calcularProximoMes();
+        if(!usuarioLogadoUid) return;
+        await db.collection("usuarios").doc(usuarioLogadoUid).collection("clientes").doc(id).update({
+            data: novaDataISO,
+            status: 'apagar'
+        });
+        const msg = `⛔️𝕊𝔼𝕌 ℙ𝔸𝔾𝔸𝕄𝔼ℕ𝕋𝕆 ℕ𝔸𝕆 𝔽𝕆𝕀 ℂ𝕆ℕ𝔽𝕀ℝ𝕄𝔸𝔻𝕆𝕊!!\n\nNome: ${cliente.nome}\nPlano Familia: R$ ${cliente.valor}\nProvedor: ${cliente.serv}\nUsuário: ${cliente.user}\nSenha: ${cliente.pass}\nUrl: ${cliente.url}\nVence: ${novaDataBR}\n\nDivirta-se!!`;
+        if(cliente.tel) window.open(`https://wa.me/${cliente.tel.replace(/\D/g,'')}?text=${encodeURIComponent(msg)}`);
+    }
+
+    // Botão PAGO (exclusivo da aba A PAGAR): atualiza data +1 mês, status ativo, envia mensagem ✅
+    async function pagarCliente(id) {
+        const cliente = clientes.find(c => c.id === id);
+        if(!cliente) return;
+        const { novaDataISO, novaDataBR } = calcularProximoMes();
+        if(!usuarioLogadoUid) return;
+        await db.collection("usuarios").doc(usuarioLogadoUid).collection("clientes").doc(id).update({
+            data: novaDataISO,
+            status: 'ativo'
+        });
+        const msg = `✅𝕊𝔼𝕌 ℙ𝔸𝔾𝔸𝕄𝔼ℕ𝕋𝕆 𝔽𝕆𝕀 ℂ𝕆ℕ𝔽𝕀ℝ𝕄𝔸𝔻𝕆𝕊!!\n\nNome: ${cliente.nome}\nPlano Familia: R$ ${cliente.valor}\nProvedor: ${cliente.serv}\nUsuário: ${cliente.user}\nSenha: ${cliente.pass}\nUrl: ${cliente.url}\nVence: ${novaDataBR}\n\nDivirta-se!!`;
+        if(cliente.tel) window.open(`https://wa.me/${cliente.tel.replace(/\D/g,'')}?text=${encodeURIComponent(msg)}`);
     }
 
     function sendZap(id, tipo) {
@@ -446,7 +397,6 @@
         const novaData = new Date();
         novaData.setMonth(novaData.getMonth() + 1);
         const dataFormat = novaData.toLocaleDateString('pt-BR');
-
         if(tipo === 'cobranca') {
             msg = `📩 𝕞𝕤𝕘-𝕒𝕦𝕥𝕠𝕞á𝕥𝕚𝕔𝕒📩\n🚨🚨🚨🚨🚨🚨🚨🚨\n\nOla ${c.nome}!!\nSou o assistente virtual da ITVplayer 🤖\n\nSua lista de\nTV, FILMES & SÉRIES\nexpirou ${c.data}\n\nPara renovar Faz um Pix 💠\n💰Plano Familia: R$:${c.valor}\n${config.msg || ""}`;
         } else if(tipo === 'pago') {
@@ -454,48 +404,14 @@
         } else {
             msg = `⛔️𝕊𝔼𝕌 ℙ𝔸𝔾𝔸𝕄𝔼ℕ𝕋𝕆 ℕ𝔸𝕆 𝔽𝕆𝕀 ℂ𝕆ℕ𝔽𝕀ℝ𝕄𝔸𝔻𝕆𝕊!!\n\nNome: ${c.nome}\nPlano Familia: ${c.valor}\nProvedor: ${c.serv}\nUsuário: ${c.user}\nSenha: ${c.pass}\nUrl: ${c.url}\nVence: ${dataFormat}\n\nDivirta-se!!`;
         }
-        
         window.open(`https://wa.me/${c.tel.replace(/\D/g,'')}?text=${encodeURIComponent(msg)}`);
     }
 
-    function updateStatus(id, acao) {
-        if(!usuarioLogadoUid) return;
-        const index = clientes.findIndex(item => item.id === id);
-        if(index === -1) return;
-
-        const dataAtual = new Date(clientes[index].data);
-        dataAtual.setMonth(dataAtual.getMonth() + 1);
-        const novaDataStr = dataAtual.toISOString().split('T')[0];
-        
-        let novoStatus = acao === 'pago' ? 'ativo' : 'apagar';
-        
-        db.collection("usuarios").doc(usuarioLogadoUid).collection("clientes").doc(id).update({
-            data: novaDataStr,
-            status: novoStatus
-        }).then(() => {
-            sendZap(id, acao);
-        });
-    }
-
     function filterData(f) { currentFilter = f; renderClientes(); }
-    
-    function softDelete(id) { 
-        if(!usuarioLogadoUid) return;
-        db.collection("usuarios").doc(usuarioLogadoUid).collection("clientes").doc(id).update({ status: 'deletado' }); 
-    }
-    function restore(id) { 
-        if(!usuarioLogadoUid) return;
-        db.collection("usuarios").doc(usuarioLogadoUid).collection("clientes").doc(id).update({ status: 'ativo' }); 
-    }
-    function hardDelete(id) { 
-        if(!usuarioLogadoUid) return;
-        if(confirm("Excluir permanentemente do Firebase?")) { 
-            db.collection("usuarios").doc(usuarioLogadoUid).collection("clientes").doc(id).delete();
-        } 
-    }
-    
+    function softDelete(id) { if(usuarioLogadoUid) db.collection("usuarios").doc(usuarioLogadoUid).collection("clientes").doc(id).update({ status: 'deletado' }); }
+    function restore(id) { if(usuarioLogadoUid) db.collection("usuarios").doc(usuarioLogadoUid).collection("clientes").doc(id).update({ status: 'ativo' }); }
+    function hardDelete(id) { if(usuarioLogadoUid && confirm("Excluir permanentemente do Firebase?")) db.collection("usuarios").doc(usuarioLogadoUid).collection("clientes").doc(id).delete(); }
     function accessPanel(n) { const url = config['p'+n]; if(url) window.open(url); else alert("Cadastre a URL no menu lateral"); }
-
     function editCliente(id) {
         const c = clientes.find(item => item.id === id);
         if(!c) return;
@@ -510,6 +426,79 @@
         document.getElementById('cTel').value = c.tel;
         document.getElementById('cObs').value = c.obs;
         new bootstrap.Modal(document.getElementById('modalCadastro')).show();
+    }
+
+    function renderClientes() {
+        const lista = document.getElementById('listaClientes');
+        const search = document.getElementById('search').value.toLowerCase();
+        lista.innerHTML = "";
+        let counts = { ativos: 0, vencer: 0, exp: 0, apagar: 0, del: 0 };
+        const hoje = new Date();
+        clientes.forEach(c => {
+            const dataVenc = new Date(c.data);
+            const diffDays = Math.ceil((dataVenc - hoje) / (1000 * 60 * 60 * 24));
+            let statusReal = c.status;
+            if(c.status !== 'deletado' && c.status !== 'apagar') {
+                if(diffDays < 0) statusReal = 'expirado';
+                else if(diffDays <= 3) statusReal = 'vencer';
+                else statusReal = 'ativo';
+            }
+            if(statusReal === 'ativo') counts.ativos++;
+            if(statusReal === 'vencer') counts.vencer++;
+            if(statusReal === 'expirado') counts.exp++;
+            if(c.status === 'apagar') counts.apagar++;
+            if(c.status === 'deletado') counts.del++;
+            if(currentFilter === 'ativos' && (statusReal === 'deletado' || statusReal === 'expirado' || statusReal === 'apagar')) return;
+            if(currentFilter === 'vencer' && statusReal !== 'vencer') return;
+            if(currentFilter === 'expirados' && statusReal !== 'expirado') return;
+            if(currentFilter === 'apagar' && c.status !== 'apagar') return;
+            if(currentFilter === 'deletados' && c.status !== 'deletado') return;
+            if(!c.nome.toLowerCase().includes(search)) return;
+
+            // Montagem dos botões conforme o filtro
+            let botoes = '';
+            if(currentFilter === 'apagar') {
+                // Na aba A PAGAR: ocultar COBRAR, WHATSAPP, DELETAR. Exibir botão PAGO e manter editar.
+                botoes = `
+                    <button class="btn btn-sm btn-success" onclick="pagarCliente('${c.id}')">PAGO</button>
+                    <button class="btn btn-sm bg-lilas" onclick="editCliente('${c.id}')"><i class="bi bi-pencil"></i></button>
+                `;
+            } else {
+                // Demais abas: todos os botões normais, incluindo os novos RENOVAR e A RECEBER
+                botoes = `
+                    <button class="btn btn-sm btn-success" onclick="sendZap('${c.id}', 'cobranca')">COBRAR</button>
+                    <button class="btn btn-sm btn-primary" onclick="renovarCliente('${c.id}')">RENOVAR</button>
+                    <button class="btn btn-sm btn-warning" onclick="aReceberCliente('${c.id}')">A RECEBER</button>
+                    <button class="btn btn-sm" style="background-color: #25D366; color: white;" onclick="openWhatsApp('${c.id}')"><i class="bi bi-whatsapp"></i></button>
+                    <button class="btn btn-sm bg-lilas" onclick="editCliente('${c.id}')"><i class="bi bi-pencil"></i></button>
+                `;
+                if(c.status === 'deletado') {
+                    botoes += `<button class="btn btn-sm btn-info" onclick="restore('${c.id}')">RESTAURAR</button>
+                               <button class="btn btn-sm btn-danger" onclick="hardDelete('${c.id}')">EXCLUIR</button>`;
+                } else {
+                    botoes += `<button class="btn btn-sm btn-danger" onclick="softDelete('${c.id}')"><i class="bi bi-trash"></i></button>`;
+                }
+            }
+
+            lista.innerHTML += `
+                <div class="card-cliente">
+                    <div class="d-flex justify-content-between">
+                        <h5>${c.nome}</h5>
+                        <span class="badge ${statusReal === 'expirado' ? 'bg-danger' : (statusReal === 'vencer' ? 'bg-warning' : 'bg-success')}">${c.data}</span>
+                    </div>
+                    <p class="small mb-2">User: ${c.user} | Valor: <strong>R$${c.valor}</strong></p>
+                    <div class="d-flex flex-wrap gap-1">
+                        ${botoes}
+                    </div>
+                </div>
+            `;
+        });
+        document.getElementById('countAtivos').innerText = counts.ativos;
+        document.getElementById('countVencer').innerText = counts.vencer;
+        document.getElementById('countExp').innerText = counts.exp;
+        document.getElementById('countPagar').innerText = counts.apagar;
+        document.getElementById('countDel').innerText = counts.del;
+        renderFinanceiro();
     }
 </script>
 </body>
